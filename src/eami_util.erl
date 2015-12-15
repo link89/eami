@@ -35,7 +35,7 @@ parse(Data, Fragment) ->
 parse(Data, Fragment, Messages) ->
     case binary:split(<<Fragment/binary, Data/binary>>, [?EOM]) of
         [RawMsg, Rest] ->
-            parse(Rest, <<>>, [encode_message(RawMsg) | Messages]);
+            parse(Rest, <<>>, [RawMsg | Messages]);
         [NewFragment] ->
             {Messages, NewFragment}
     end.

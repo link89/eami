@@ -14,7 +14,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/8]).
+-export([start_link/8, stop/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -36,12 +36,9 @@
                 ,on_event :: fun() | undefined
                 ,fragment :: binary()
 
-                ,reconnect_sleep :: integer() | undefined
-                ,connect_timeout :: integer() | undefined
+                ,reconnect_sleep :: integer() | no_reconnect
+                ,connect_timeout :: integer() | infinity
                 ,socket :: port() | undefined
-
-                ,self :: pid()
-                ,seq :: integer()
                }).
 -type state() :: #state{}.
 
@@ -62,6 +59,9 @@ start_link(Host, Port, Username, Events, OnEvent, Password, ReconnectSleep, Conn
     gen_server:start_link(?MODULE, [Host, Port, Username, Password, Events, OnEvent,
                                     ReconnectSleep, ConnectTimeout], []).
 
+stop(Pid) ->
+    gen_server:call(Pid, stop).
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -78,10 +78,7 @@ init([Host, Port, Username, Password, Events, OnEvent, ReconnectSleep, ConnectTi
 
                    ,reconnect_sleep = ReconnectSleep
                    ,connect_timeout = ConnectTimeout
-
-                   ,self = self()
-                   ,seq = 0},
-
+                  },
     case connect(State) of
         {ok, NewState} ->
             {ok, NewState};
@@ -91,6 +88,17 @@ init([Host, Port, Username, Password, Events, OnEvent, ReconnectSleep, ConnectTi
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
+
+handle_cast(_Msg, #state{socket = undefined} = State) ->
+    {reply, {error, no_connection}, State};
+
+handle_cast({request, Req}, State) ->
+    case gen_tcp:send(State#state.socket, Req) of
+        ok ->
+            {noreply, State};
+        {error, Reason} ->
+            {reply, {error, Reason}, State}
+    end;
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -134,7 +142,11 @@ handle_info({connection_ready, Socket}, #state{socket = undefined} = State) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{socket = undefined}) ->
+    ok;
+
+terminate(_Reason, #state{socket = Socket}) ->
+    gen_tcp:close(Socket),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -167,9 +179,9 @@ authenticate(Socket, Username, Password, Events) ->
                                             ,{<<"Username">>, Username}
                                             ,{<<"Secret">>, Password}
                                             ,{<<"Events">>, Events}]),
-    do_sync_command(Socket, LoginAction).
+    do_authenticate(Socket, LoginAction).
 
-do_sync_command(Socket, Command) ->
+do_authenticate(Socket, Command) ->
     ok = inet:setopts(Socket, [{active, false}]),
     case gen_tcp:send(Socket, Command) of
         ok ->
@@ -193,8 +205,8 @@ do_sync_command(Socket, Command) ->
 handle_response(Data, #state{on_event = OnEvent
                              ,fragment = Fragment} = State) ->
     case eami_util:parse(Data, Fragment) of
-        {Messages, NewFragment} ->
-            OnEvent(Messages),
+        {Events, NewFragment} ->
+            catch spawn(fun() -> OnEvent(Events, State) end),
             State#state{fragment = NewFragment};
         _ ->
             State
