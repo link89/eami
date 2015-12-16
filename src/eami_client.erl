@@ -14,7 +14,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/8, stop/1]).
+-export([start_link/1, start_link/8, stop/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -63,6 +63,22 @@ stop(Pid) ->
     gen_server:call(Pid, stop).
 
 %% ------------------------------------------------------------------
+%% API For Poolboy
+%% ------------------------------------------------------------------
+
+-spec start_link(Args::term()) -> {ok, Pid::pid()} | {error, Reason::term()}.
+start_link(Args) ->
+    Host           = proplists:get_value(host, Args, "127.0.0.1"),
+    Port           = proplists:get_value(port, Args, 6379),
+    Username       = proplists:get_value(username, Args, 0),
+    Password       = proplists:get_value(password, Args, ""),
+    Events         = proplists:get_value(events, Args, ""),
+    OnEvent        = proplists:get_value(on_event, Args, ""),
+    ReconnectSleep = proplists:get_value(reconnect_sleep, Args, 100),
+    ConnectTimeout = proplists:get_value(connect_timeout, Args, 5000),
+    start_link(Host, Port, Username, Events, OnEvent, Password, ReconnectSleep, ConnectTimeout).
+
+%% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
@@ -79,15 +95,20 @@ init([Host, Port, Username, Password, Events, OnEvent, ReconnectSleep, ConnectTi
                    ,reconnect_sleep = ReconnectSleep
                    ,connect_timeout = ConnectTimeout
                   },
-    case connect(State) of
-        {ok, NewState} ->
-            {ok, NewState};
-        {error, Reason} ->
-            {stop, {connection_error, Reason}}
-    end.
+    gen_server:cast(self(), init),
+    {ok, State}.
+
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
+
+handle_cast(init, State) ->
+    case connect(State) of
+        {ok, NewState} ->
+            {noreply, NewState};
+        {error, Reason} ->
+            {stop, Reason, State}
+    end;
 
 handle_cast(_Msg, #state{socket = undefined} = State) ->
     {reply, {error, no_connection}, State};
