@@ -227,7 +227,7 @@ handle_response(Data, #state{on_event = OnEvent
                              ,fragment = Fragment} = State) ->
     case eami_util:parse(Data, Fragment) of
         {Events, NewFragment} ->
-            catch spawn(fun() -> OnEvent(Events, State) end),
+            catch spawn(fun() -> OnEvent(Events) end),
             State#state{fragment = NewFragment};
         _ ->
             State

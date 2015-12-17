@@ -45,13 +45,13 @@
                            ,?GET_CFG(action_pool_size, 5)
                            ,?GET_CFG(action_pool_overflow, 5)
                            ,off
-                           ,fun eami_ctrl:handle_responses/2)).
+                           ,fun eami_restful:handle_ami_responses/1)).
 
 -define(EVENTS_POOL, ?POOL(events_pool
                            ,?GET_CFG(events_pool_size, 2)
                            ,0
                            ,on
-                           ,fun eami_ctrl:handle_events/2)).
+                           ,fun eami_restful:handle_ami_events/1)).
 
 -define(CHILDREN, [?ACTION_POOL
                    ,?EVENTS_POOL
