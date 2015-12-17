@@ -69,12 +69,12 @@ stop(Pid) ->
 -spec start_link(Args::term()) -> {ok, Pid::pid()} | {error, Reason::term()}.
 start_link(Args) ->
     Host           = proplists:get_value(host, Args, "127.0.0.1"),
-    Port           = proplists:get_value(port, Args, 6379),
-    Username       = proplists:get_value(username, Args, 0),
-    Password       = proplists:get_value(password, Args, ""),
-    Events         = proplists:get_value(events, Args, ""),
-    OnEvent        = proplists:get_value(on_event, Args, ""),
-    ReconnectSleep = proplists:get_value(reconnect_sleep, Args, 100),
+    Port           = proplists:get_value(port, Args, 5038),
+    Username       = proplists:get_value(username, Args, "admin"),
+    Password       = proplists:get_value(password, Args, "12345"),
+    Events         = proplists:get_value(events, Args, off),
+    OnEvent        = proplists:get_value(on_event, Args, undefined),
+    ReconnectSleep = proplists:get_value(reconnect_sleep, Args, 1000),
     ConnectTimeout = proplists:get_value(connect_timeout, Args, 5000),
     start_link(Host, Port, Username, Events, OnEvent, Password, ReconnectSleep, ConnectTimeout).
 
