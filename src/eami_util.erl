@@ -12,10 +12,10 @@ encode_message(Message) ->
     lists:foldr(
       fun({Key, Value}, Acc) ->
               [to_binary(Key), <<":">>, to_binary(Value), ?EOL | Acc]
-      end, [], Message).
+      end, [?EOL], Message).
 
 decode_message(Data) ->
-    Lines = tokens(to_binary(Data), [?EOL, <<" ">>]),
+    Lines = tokens(to_binary(Data), [?EOL]),
     lists:filtermap(
       fun(Line) ->
               case tokens(Line, [<<":">>, <<" ">>]) of

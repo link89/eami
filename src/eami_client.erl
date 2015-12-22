@@ -6,7 +6,7 @@
 
 -define(SERVER, ?MODULE).
 
--define(SOCKET_OPTS, [binary, {active, once}, {packet, raw}, {reuseaddr, true}]).
+-define(SOCKET_OPTS, [binary, {active, false}, {packet, raw}, {reuseaddr, true}]).
 -define(RECV_TIMEOUT, 5000).
 
 
@@ -55,7 +55,7 @@
                  ,ReconnectSleep :: integer() | undefined
                  ,ConnectTimeout :: integer() | undefined) ->
     {ok, Pid::pid()} | {error, Reason::term()}.
-start_link(Host, Port, Username, Events, OnEvent, Password, ReconnectSleep, ConnectTimeout) ->
+start_link(Host, Port, Username, Password, Events, OnEvent, ReconnectSleep, ConnectTimeout) ->
     gen_server:start_link(?MODULE, [Host, Port, Username, Password, Events, OnEvent,
                                     ReconnectSleep, ConnectTimeout], []).
 
@@ -185,11 +185,16 @@ connect(#state{host = Host
                ,connect_timeout = ConnectTimeout} = State) ->
     case gen_tcp:connect(Host, Port, ?SOCKET_OPTS, ConnectTimeout) of
         {ok, Socket} ->
-            case authenticate(Socket, Username, Password, Events) of
-                ok ->
-                    {ok, State#state{socket = Socket}};
-                {error, Reason} ->
-                    {error, {authentication_error, Reason}}
+            case gen_tcp:recv(Socket, 0, ?RECV_TIMEOUT) of
+                {ok, _Version} ->
+                    case authenticate(Socket, Username, Password, Events) of
+                        ok ->
+                            {ok, State#state{socket = Socket}};
+                        {error, Reason} ->
+                            {error, {authentication_error, Reason}}
+                    end;
+                Other ->
+                    {error, {unexpected_data, Other}}
             end;
         {error, Reason} ->
             {error, {connection_error, Reason}}
@@ -203,7 +208,6 @@ authenticate(Socket, Username, Password, Events) ->
     do_authenticate(Socket, LoginAction).
 
 do_authenticate(Socket, Command) ->
-    ok = inet:setopts(Socket, [{active, false}]),
     case gen_tcp:send(Socket, Command) of
         ok ->
             case gen_tcp:recv(Socket, 0, ?RECV_TIMEOUT) of
